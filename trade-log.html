@@ -247,8 +247,8 @@ tr:hover td { background: var(--bg3); }
         </div>
 
         <div class="btn-group" style="justify-content:flex-start;">
-          <button class="btn btn-primary" onclick="saveEntry()">💾 保存记录</button>
-          <button class="btn btn-outline" onclick="saveAndNew()">保存并继续</button>
+          <button class="btn btn-primary" onclick="doSaveRecord()">💾 保存记录</button>
+          <button class="btn btn-outline" onclick="doSaveAndNew()">保存并继续</button>
         </div>
       </div>
 
@@ -661,7 +661,7 @@ function resetForm() {
 }
 
 // ========== Save Record ==========
-async function saveEntry(andNew) {
+async function doSave(andNew = false) {
   const values = getFormValues();
   const hasValue = Object.values(values).some(v=>v!==''&&v!==null&&v!==false);
   const filenames = pendingImages.filter(p=>p.filename).map(p=>p.filename);
@@ -683,8 +683,8 @@ async function saveEntry(andNew) {
     alert('保存失败：' + e.message);
   }
 }
-function saveEntry() { saveEntry(false); }
-function saveAndNew() { saveEntry(true); }
+function doSaveRecord() { doSave(false); }
+function doSaveAndNew() { doSave(true); }
 
 // ========== Close ==========
 async function closeEntry() {
@@ -911,7 +911,7 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
 document.addEventListener('keydown',e=>{
   if(e.key==='Escape'){closeLightbox();closeRecordModal();closeFieldModal();}
   if((e.ctrlKey||e.metaKey)&&e.key==='Enter'){
-    if(document.getElementById('panel-entry').classList.contains('active')) saveEntry();
+    if(document.getElementById('panel-entry').classList.contains('active')) doSave();
   }
 });
 
