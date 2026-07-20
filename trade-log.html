@@ -671,6 +671,7 @@ async function doSave(andNew = false) {
     timestamp: new Date().toISOString(),
     values,
     screenshots: filenames,
+    result: null, closePrice: null, closeTime: null, closeType: null, closePnL: null,
   };
   try {
     await createRecord(record);
