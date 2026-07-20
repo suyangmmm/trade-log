@@ -319,18 +319,19 @@ seed_defaults()
 print(f"┌──────────────────────────────────────────")
 print(f"│  交易开仓流程记录")
 print(f"│")
-print(f"│  URL:    http://0.0.0.0:{PORT}")
+print(f"│  URL:    {SCHEME}://0.0.0.0:{PORT}")
 print(f"│  DB:     {DB_PATH}")
 print(f"│  Upload: {UPLOAD_DIR}/")
 print(f"│  Mode:   {'Debug' if DEBUG else 'Production'}")
 print(f"└──────────────────────────────────────────")
 
 if __name__ == '__main__':
+    ssl_ctx = (CERT_FILE, KEY_FILE) if USE_HTTPS else None
     if DEBUG:
-        app.run(host=HOST, port=PORT, debug=True)
+        app.run(host=HOST, port=PORT, debug=True, ssl_context=ssl_ctx)
     else:
         # For production, use gunicorn instead:
         # gunicorn -w 1 -b 0.0.0.0:5800 server:app
         print("\n* For production: gunicorn -w 1 -b 0.0.0.0:5800 server:app")
         print("* Or: pip install gunicorn && ./start.sh\n")
-        app.run(host=HOST, port=PORT, debug=False)
+        app.run(host=HOST, port=PORT, debug=False, ssl_context=ssl_ctx)
