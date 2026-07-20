@@ -312,20 +312,20 @@ def serve_html():
     return send_file(str(html_path))
 
 # ========== Main ==========
+UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+init_db()
+seed_defaults()
+
+print(f"┌──────────────────────────────────────────")
+print(f"│  交易开仓流程记录")
+print(f"│")
+print(f"│  URL:    http://0.0.0.0:{PORT}")
+print(f"│  DB:     {DB_PATH}")
+print(f"│  Upload: {UPLOAD_DIR}/")
+print(f"│  Mode:   {'Debug' if DEBUG else 'Production'}")
+print(f"└──────────────────────────────────────────")
+
 if __name__ == '__main__':
-    UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
-    init_db()
-    seed_defaults()
-
-    print(f"┌──────────────────────────────────────────")
-    print(f"│  交易开仓流程记录")
-    print(f"│")
-    print(f"│  URL:    http://0.0.0.0:{PORT}")
-    print(f"│  DB:     {DB_PATH}")
-    print(f"│  Upload: {UPLOAD_DIR}/")
-    print(f"│  Mode:   {'Debug' if DEBUG else 'Production'}")
-    print(f"└──────────────────────────────────────────")
-
     if DEBUG:
         app.run(host=HOST, port=PORT, debug=True)
     else:
