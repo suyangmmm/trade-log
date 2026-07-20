@@ -1,0 +1,9 @@
+trade.db
+trade.db-shm
+trade.db-wal
+uploads/*
+__pycache__/
+*.pyc
+.env
+.DS_Store
+*.log

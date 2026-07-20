@@ -1,0 +1,930 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>交易开仓流程记录</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --bg: #0f1117;
+  --bg2: #181b24;
+  --bg3: #1f2330;
+  --border: #2a2e3d;
+  --text: #e2e4eb;
+  --text2: #8b8fa3;
+  --accent: #4f8cff;
+  --accent2: #3b6fdb;
+  --green: #34c759;
+  --red: #ff4757;
+  --orange: #ff9f43;
+  --radius: 8px;
+  --shadow: 0 2px 12px rgba(0,0,0,.3);
+}
+html, body { height: 100%; }
+body {
+  font-family: -apple-system, "PingFang SC", "Noto Sans SC", "Helvetica Neue", sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 14px;
+  line-height: 1.6;
+}
+.app { display: flex; flex-direction: column; height: 100vh; max-width: 960px; margin: 0 auto; padding: 0 16px; }
+.header { display: flex; align-items: center; justify-content: space-between; padding: 16px 0; border-bottom: 1px solid var(--border); flex-wrap: wrap; gap: 8px; }
+.header h1 { font-size: 18px; font-weight: 600; letter-spacing: .5px; }
+.header h1 span { color: var(--accent); }
+.header-info { font-size: 12px; color: var(--text2); }
+.header-info span { margin-left: 12px; }
+.loading { opacity: .5; pointer-events: none; transition: opacity .2s; }
+.server-status { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; padding: 2px 8px; border-radius: 4px; background: rgba(52,199,89,.15); color: var(--green); }
+.server-status.offline { background: rgba(255,71,87,.15); color: var(--red); }
+
+.tabs { display: flex; gap: 0; border-bottom: 1px solid var(--border); margin-top: 0; flex-wrap: wrap; }
+.tab-btn {
+  padding: 10px 20px;
+  background: none;
+  border: none;
+  color: var(--text2);
+  font-size: 13px;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  transition: all .2s;
+  font-family: inherit;
+}
+.tab-btn:hover { color: var(--text); }
+.tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+.content { flex: 1; overflow-y: auto; padding: 20px 0; }
+.tab-panel { display: none; }
+.tab-panel.active { display: block; }
+
+.card { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; margin-bottom: 16px; }
+
+.form-row { margin-bottom: 12px; }
+.form-row label { display: block; font-size: 12px; color: var(--text2); margin-bottom: 4px; font-weight: 500; }
+.form-row input, .form-row select, .form-row textarea {
+  width: 100%;
+  padding: 8px 12px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text);
+  font-size: 13px;
+  font-family: inherit;
+  outline: none;
+  transition: border-color .2s;
+}
+.form-row input:focus, .form-row select:focus, .form-row textarea:focus { border-color: var(--accent); }
+.form-row textarea { min-height: 80px; resize: vertical; }
+.form-row select { cursor: pointer; }
+.form-row input[type="checkbox"] { width: auto; margin-right: 6px; }
+.form-row .checkbox-label { display: flex; align-items: center; gap: 6px; cursor: pointer; }
+
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  padding: 8px 18px; border: none; border-radius: var(--radius);
+  font-size: 13px; font-weight: 500; cursor: pointer;
+  transition: all .2s; font-family: inherit;
+}
+.btn-primary { background: var(--accent); color: #fff; }
+.btn-primary:hover { background: var(--accent2); }
+.btn-danger { background: var(--red); color: #fff; }
+.btn-danger:hover { opacity: .85; }
+.btn-outline {
+  background: none; border: 1px solid var(--border); color: var(--text2);
+}
+.btn-outline:hover { border-color: var(--text2); color: var(--text); }
+.btn-sm { padding: 4px 12px; font-size: 12px; }
+.btn-group { display: flex; gap: 8px; margin-top: 16px; flex-wrap: wrap; }
+
+.table-wrap { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--border); }
+th { font-size: 11px; color: var(--text2); font-weight: 600; text-transform: uppercase; letter-spacing: .5px; background: var(--bg3); position: sticky; top: 0; white-space: nowrap; }
+tr:hover td { background: var(--bg3); }
+
+.modal-overlay {
+  display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+  background: rgba(0,0,0,.6); align-items: center; justify-content: center; z-index: 100;
+}
+.modal-overlay.show { display: flex; }
+.modal {
+  background: var(--bg2); border: 1px solid var(--border); border-radius: 12px;
+  padding: 24px; width: 90%; max-width: 520px; max-height: 80vh; overflow-y: auto;
+  box-shadow: var(--shadow);
+}
+.modal-wide { max-width: 700px; }
+.modal h3 { font-size: 16px; margin-bottom: 16px; }
+
+.result-badge { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; padding: 2px 8px; border-radius: 4px; }
+.result-badge.win { background: rgba(52,199,89,.15); color: var(--green); }
+.result-badge.loss { background: rgba(255,71,87,.15); color: var(--red); }
+.result-badge.pending { background: rgba(255,159,67,.15); color: var(--orange); }
+.empty { text-align: center; padding: 48px 16px; color: var(--text2); font-size: 14px; }
+.field-list { display: flex; flex-direction: column; gap: 6px; }
+.field-item {
+  display: flex; align-items: center; gap: 10px;
+  background: var(--bg); padding: 10px 12px; border-radius: var(--radius);
+  border: 1px solid var(--border);
+}
+.field-item .drag { color: var(--text2); cursor: grab; font-size: 16px; user-select: none; }
+.field-item .name { flex: 1; font-size: 13px; }
+.field-item .type { font-size: 11px; color: var(--text2); background: var(--bg3); padding: 2px 8px; border-radius: 4px; white-space: nowrap; }
+.field-item .actions { display: flex; gap: 6px; }
+.field-item .on { color: var(--green); }
+.field-item .off { color: var(--text2); }
+
+.img-upload-area {
+  border: 2px dashed var(--border);
+  border-radius: var(--radius);
+  padding: 24px;
+  text-align: center;
+  cursor: pointer;
+  transition: all .2s;
+  background: var(--bg);
+}
+.img-upload-area:hover { border-color: var(--accent); background: var(--bg3); }
+.img-upload-area.dragover { border-color: var(--accent); background: rgba(79,140,255,.1); }
+.img-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+  gap: 8px;
+  margin-top: 8px;
+}
+.img-thumb {
+  position: relative;
+  aspect-ratio: 1;
+  border-radius: 6px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  cursor: pointer;
+}
+.img-thumb img { width: 100%; height: 100%; object-fit: cover; }
+.img-thumb .del-btn {
+  position: absolute; top: 4px; right: 4px;
+  width: 22px; height: 22px;
+  background: rgba(0,0,0,.7);
+  color: #fff;
+  border: none;
+  border-radius: 50%;
+  cursor: pointer;
+  font-size: 14px;
+  display: flex; align-items: center; justify-content: center;
+  opacity: 0;
+  transition: opacity .2s;
+}
+.img-thumb:hover .del-btn { opacity: 1; }
+.img-indicator { font-size: 11px; color: var(--text2); }
+
+.lightbox {
+  display: none; position: fixed; top: 0; left: 0;
+  width: 100%; height: 100%;
+  background: rgba(0,0,0,.85);
+  align-items: center; justify-content: center;
+  z-index: 200;
+  cursor: zoom-out;
+}
+.lightbox.show { display: flex; }
+.lightbox img { max-width: 90vw; max-height: 90vh; border-radius: 8px; box-shadow: 0 8px 40px rgba(0,0,0,.5); }
+
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+@media (max-width: 600px) {
+  .app { padding: 0 8px; }
+  .header h1 { font-size: 15px; }
+  .field-item { flex-wrap: wrap; }
+  table { font-size: 12px; }
+  th, td { padding: 6px 6px; }
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="header">
+    <div style="display:flex;align-items:center;gap:12px;">
+      <h1>📋 开仓<span>流程记录</span></h1>
+      <span class="server-status" id="serverStatus">● 已连接</span>
+    </div>
+    <div class="header-info">
+      <span id="recordCount">加载中…</span>
+    </div>
+  </header>
+
+  <nav class="tabs">
+    <button class="tab-btn active" data-tab="entry">开仓记录</button>
+    <button class="tab-btn" data-tab="history">历史记录</button>
+    <button class="tab-btn" data-tab="fields">字段管理</button>
+  </nav>
+
+  <div class="content" id="mainContent">
+    <!-- Tab: Entry -->
+    <div class="tab-panel active" id="panel-entry">
+      <div class="card">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px;">
+          <div>
+            <div style="font-weight:600;font-size:15px;">新建开仓记录</div>
+            <div style="font-size:12px;color:var(--text2);" id="currentTime"></div>
+          </div>
+          <button class="btn btn-outline btn-sm" onclick="resetForm()">清空</button>
+        </div>
+        <div id="formFields"></div>
+
+        <div class="form-row">
+          <label>截图附件 <span style="font-size:11px;color:var(--text2);">(点击或拖放上传，存为独立文件)</span></label>
+          <div class="img-upload-area" id="dropZone" onclick="document.getElementById('fileInput').click()">
+            <div style="font-size:28px;margin-bottom:8px;opacity:.4;">🖼</div>
+            <div style="font-size:13px;">点击上传或拖放截图</div>
+            <div style="font-size:11px;color:var(--text2);margin-top:4px;">JPG / PNG / WebP，直接上传到服务器</div>
+          </div>
+          <input type="file" id="fileInput" accept="image/*" multiple style="display:none">
+          <div class="img-grid" id="previewGrid"></div>
+          <div style="font-size:11px;color:var(--text2);margin-top:4px;">
+            <span id="pendingImgCount">0 张</span>
+            <span style="margin-left:8px;" id="uploadStatus"></span>
+          </div>
+        </div>
+
+        <div class="btn-group" style="justify-content:flex-start;">
+          <button class="btn btn-primary" onclick="saveEntry()">💾 保存记录</button>
+          <button class="btn btn-outline" onclick="saveAndNew()">保存并继续</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <div style="font-weight:600;font-size:15px;margin-bottom:8px;">快速平仓</div>
+        <div style="font-size:12px;color:var(--text2);margin-bottom:12px;">选择持仓记录，录入平仓结果</div>
+        <form id="closeForm" style="display:flex;flex-wrap:wrap;gap:8px;align-items:end;">
+          <div style="flex:2;min-width:160px;">
+            <label style="display:block;font-size:11px;color:var(--text2);margin-bottom:2px;">开仓记录</label>
+            <select id="closeRecordSelect" style="width:100%;padding:6px 10px;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);color:var(--text);font-size:13px;"></select>
+          </div>
+          <div style="flex:1;min-width:80px;">
+            <label style="display:block;font-size:11px;color:var(--text2);margin-bottom:2px;">平仓价</label>
+            <input type="number" id="closePrice" step="any" style="width:100%;padding:6px 10px;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);color:var(--text);font-size:13px;">
+          </div>
+          <div style="flex:1;min-width:80px;">
+            <label style="display:block;font-size:11px;color:var(--text2);margin-bottom:2px;">类型</label>
+            <select id="closeType" style="width:100%;padding:6px 10px;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);color:var(--text);font-size:13px;">
+              <option value="止盈">止盈</option>
+              <option value="止损">止损</option>
+              <option value="手动平仓">手动平仓</option>
+            </select>
+          </div>
+          <div style="flex:1;min-width:80px;">
+            <label style="display:block;font-size:11px;color:var(--text2);margin-bottom:2px;">盈亏额</label>
+            <input type="number" id="closePnL" step="any" style="width:100%;padding:6px 10px;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);color:var(--text);font-size:13px;" placeholder="可选">
+          </div>
+          <button class="btn btn-primary btn-sm" onclick="closeEntry()">记录平仓</button>
+        </form>
+      </div>
+    </div>
+
+    <!-- Tab: History -->
+    <div class="tab-panel" id="panel-history">
+      <div class="card">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px;">
+          <div style="font-weight:600;font-size:15px;">历史记录</div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;">
+            <select id="filterResult" style="padding:4px 10px;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);color:var(--text);font-size:12px;" onchange="renderHistory()">
+              <option value="all">全部</option>
+              <option value="pending">持仓中</option>
+              <option value="止盈">止盈</option>
+              <option value="止损">止损</option>
+              <option value="手动平仓">手动平仓</option>
+            </select>
+            <button class="btn btn-outline btn-sm" onclick="exportData()">导出 JSON</button>
+            <button class="btn btn-outline btn-sm" onclick="importData()">导入</button>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr id="historyHeader"></tr></thead>
+            <tbody id="historyBody"></tbody>
+          </table>
+        </div>
+        <div class="empty" id="historyEmpty">暂无记录</div>
+      </div>
+    </div>
+
+    <!-- Tab: Fields -->
+    <div class="tab-panel" id="panel-fields">
+      <div class="card">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+          <div style="font-weight:600;font-size:15px;">自定义字段</div>
+          <button class="btn btn-primary btn-sm" onclick="showAddField()">+ 添加字段</button>
+        </div>
+        <div style="font-size:12px;color:var(--text2);margin-bottom:12px;">管理开仓表单中需要填写的信息项。</div>
+        <div class="field-list" id="fieldList"></div>
+        <div class="empty" id="fieldEmpty" style="display:none;">暂无字段</div>
+      </div>
+      <div class="card">
+        <div style="font-weight:600;font-size:15px;margin-bottom:8px;">预设模板</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <button class="btn btn-outline btn-sm" onclick="loadTemplate('basic')">基础模板</button>
+          <button class="btn btn-outline btn-sm" onclick="loadTemplate('full')">完整模板</button>
+          <button class="btn btn-outline btn-sm" onclick="loadTemplate('futures')">期货模板</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Field Modal -->
+<div class="modal-overlay" id="fieldModal">
+  <div class="modal">
+    <h3 id="fieldModalTitle">添加字段</h3>
+    <div class="form-row">
+      <label>字段名称</label>
+      <input type="text" id="fieldNameInput" placeholder="如：趋势方向">
+    </div>
+    <div class="form-row">
+      <label>字段类型</label>
+      <select id="fieldTypeInput" onchange="toggleFieldOptions()">
+        <option value="text">文本</option>
+        <option value="number">数字</option>
+        <option value="dropdown">下拉选择</option>
+        <option value="textarea">多行文本</option>
+        <option value="boolean">开关（是/否）</option>
+      </select>
+    </div>
+    <div class="form-row" id="fieldOptionsRow" style="display:none;">
+      <label>下拉选项（每行一个）</label>
+      <textarea id="fieldOptionsInput" placeholder="多头&#10;空头&#10;震荡" rows="4"></textarea>
+    </div>
+    <div class="form-row">
+      <label style="display:flex;align-items:center;gap:6px;cursor:pointer;">
+        <input type="checkbox" id="fieldEnabledInput" checked> 默认启用
+      </label>
+    </div>
+    <div class="btn-group">
+      <button class="btn btn-outline" onclick="closeFieldModal()">取消</button>
+      <button class="btn btn-primary" onclick="saveField()">保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- Record Modal -->
+<div class="modal-overlay" id="recordModal">
+  <div class="modal modal-wide">
+    <h3 id="recordModalTitle">记录详情</h3>
+    <div id="recordModalBody"></div>
+    <div class="btn-group">
+      <button class="btn btn-danger btn-sm" onclick="deleteCurrentRecord()">删除</button>
+      <button class="btn btn-outline" onclick="closeRecordModal()">关闭</button>
+    </div>
+  </div>
+</div>
+
+<!-- Lightbox -->
+<div class="lightbox" id="lightbox" onclick="closeLightbox()">
+  <img id="lightboxImg" src="" alt="截图">
+</div>
+
+<input type="file" id="importFile" accept=".json" style="display:none">
+
+<script>
+// ========== State ==========
+let state = { fields: [], records: [] };
+let pendingImages = []; // Array of {filename, uploadStatus}
+let editingFieldId = null;
+let viewingRecordId = null;
+
+// ========== API Client ==========
+async function api(url, options = {}) {
+  const resp = await fetch(url, {
+    headers: { ...(options.body && !(options.body instanceof FormData) ? {'Content-Type':'application/json'} : {}) },
+    ...options,
+  });
+  if (!resp.ok) {
+    const text = await resp.text();
+    throw new Error(`API ${resp.status}: ${text.slice(0,100)}`);
+  }
+  return resp.json();
+}
+
+function offline() {
+  document.getElementById('serverStatus').textContent = '● 离线';
+  document.getElementById('serverStatus').className = 'server-status offline';
+  document.getElementById('mainContent').classList.add('loading');
+}
+function online() {
+  document.getElementById('serverStatus').textContent = '● 已连接';
+  document.getElementById('serverStatus').className = 'server-status';
+  document.getElementById('mainContent').classList.remove('loading');
+}
+
+// ========== Load ==========
+async function loadData() {
+  try {
+    const data = await api('/api/load');
+    state.fields = data.fields || [];
+    state.records = data.records || [];
+    online();
+  } catch(e) {
+    console.error('Load failed:', e);
+    offline();
+    state.fields = [];
+    state.records = [];
+  }
+  renderAll();
+}
+
+// ========== Fields ==========
+async function saveFields() {
+  try {
+    await api('/api/fields', { method: 'POST', body: JSON.stringify(state.fields) });
+  } catch(e) {
+    console.error('Save fields failed:', e);
+    offline();
+  }
+}
+
+async function createRecord(record) {
+  try {
+    await api('/api/records', { method: 'POST', body: JSON.stringify(record) });
+    online();
+  } catch(e) {
+    console.error('Create record failed:', e);
+    offline();
+    throw e;
+  }
+}
+
+async function closeRecord(recordId, data) {
+  try {
+    await api('/api/records/' + recordId, { method: 'PUT', body: JSON.stringify(data) });
+    online();
+  } catch(e) {
+    console.error('Close record failed:', e);
+    offline();
+  }
+}
+
+async function deleteRecordApi(recordId) {
+  try {
+    await api('/api/records/' + recordId, { method: 'DELETE' });
+    online();
+  } catch(e) {
+    console.error('Delete record failed:', e);
+    offline();
+  }
+}
+
+async function uploadImage(file) {
+  const formData = new FormData();
+  formData.append('file', file);
+  try {
+    const result = await api('/api/upload', { method: 'POST', body: formData });
+    return result.filename;
+  } catch(e) {
+    console.error('Upload failed:', e);
+    throw e;
+  }
+}
+
+function imgUrl(filename) { return '/uploads/' + filename; }
+
+// ========== Image Upload ==========
+async function handleFiles(files) {
+  for (const file of Array.from(files)) {
+    if (!file.type.startsWith('image/')) continue;
+    if (file.size > 10 * 1024 * 1024) { alert(file.name + ' 超过 10MB'); continue; }
+    // Add placeholder
+    const idx = pendingImages.push({ filename: null, uploading: true, file }) - 1;
+    renderPreviews();
+    try {
+      const fname = await uploadImage(file);
+      pendingImages[idx] = { filename: fname, uploading: false };
+    } catch(e) {
+      pendingImages[idx] = { filename: null, uploading: false, error: true };
+    }
+    renderPreviews();
+  }
+}
+
+function renderPreviews() {
+  const grid = document.getElementById('previewGrid');
+  const count = document.getElementById('pendingImgCount');
+  const status = document.getElementById('uploadStatus');
+
+  if (!pendingImages.length) {
+    grid.innerHTML = '';
+    count.textContent = '0 张';
+    status.textContent = '';
+    return;
+  }
+
+  const total = pendingImages.length;
+  const uploaded = pendingImages.filter(p=>p.filename).length;
+  count.textContent = total + ' 张';
+  status.textContent = uploaded < total ? `(上传中 ${uploaded}/${total}…)` : `(已上传 ${total} 张)`;
+
+  grid.innerHTML = pendingImages.map((p, i) => {
+    const src = p.filename ? imgUrl(p.filename) : (p.file ? URL.createObjectURL(p.file) : '');
+    const overlay = p.uploading ? '<div style="position:absolute;inset:0;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;font-size:11px;">上传中…</div>' : '';
+    return `<div class="img-thumb">
+      <img src="${src}" onclick="${p.filename ? `openLightbox('${src}')` : ''}" style="${p.uploading?'opacity:.5':''}">
+      ${overlay}
+      ${!p.uploading ? `<button class="del-btn" onclick="removePendingImage(${i})">✕</button>` : ''}
+    </div>`;
+  }).join('');
+}
+
+function removePendingImage(idx) {
+  pendingImages.splice(idx, 1);
+  renderPreviews();
+}
+
+function clearPendingImages() { pendingImages = []; renderPreviews(); }
+
+// ========== Lightbox ==========
+function openLightbox(url) { document.getElementById('lightboxImg').src=url; document.getElementById('lightbox').classList.add('show'); }
+function closeLightbox() { document.getElementById('lightbox').classList.remove('show'); }
+
+// ========== Fields Render ==========
+function renderFields() {
+  const list = document.getElementById('fieldList');
+  const empty = document.getElementById('fieldEmpty');
+  if (!state.fields.length) { list.innerHTML=''; empty.style.display='block'; return; }
+  empty.style.display='none';
+  state.fields.sort((a,b)=>a.order-b.order);
+  list.innerHTML = state.fields.map(f => `
+    <div class="field-item">
+      <span class="drag">⠿</span>
+      <span class="name">${f.name}</span>
+      <span class="type">${({text:'文本',number:'数字',dropdown:'下拉',textarea:'多行',boolean:'是/否'})[f.type]||f.type}${f.type==='dropdown'?' ('+(f.options||[]).length+'项)':''}</span>
+      <span class="actions">
+        <button class="btn btn-outline btn-sm" onclick="toggleField('${f.id}')" title="${f.enabled?'禁用':'启用'}">${f.enabled?'<span class="on">✓</span>':'<span class="off">✗</span>'}</button>
+        <button class="btn btn-outline btn-sm" onclick="editField('${f.id}')">编辑</button>
+        <button class="btn btn-danger btn-sm" onclick="deleteField('${f.id}')">删除</button>
+      </span>
+    </div>
+  `).join('');
+}
+
+function toggleField(id) { const f=state.fields.find(x=>x.id===id); if(f){f.enabled=!f.enabled;renderFields();renderForm();} debounceSaveFields(); }
+function deleteField(id) { if(!confirm('确定删除？')) return; state.fields=state.fields.filter(f=>f.id!==id); renderFields(); renderForm(); debounceSaveFields(); }
+function editField(id) {
+  const f=state.fields.find(x=>x.id===id); if(!f) return;
+  editingFieldId=id;
+  document.getElementById('fieldModalTitle').textContent='编辑字段';
+  document.getElementById('fieldNameInput').value=f.name;
+  document.getElementById('fieldTypeInput').value=f.type;
+  document.getElementById('fieldEnabledInput').checked=f.enabled;
+  document.getElementById('fieldOptionsInput').value=(f.options||[]).join('\n');
+  toggleFieldOptions(); document.getElementById('fieldModal').classList.add('show');
+}
+function showAddField() {
+  editingFieldId=null;
+  document.getElementById('fieldModalTitle').textContent='添加字段';
+  document.getElementById('fieldNameInput').value='';
+  document.getElementById('fieldTypeInput').value='text';
+  document.getElementById('fieldEnabledInput').checked=true;
+  document.getElementById('fieldOptionsInput').value='';
+  toggleFieldOptions(); document.getElementById('fieldModal').classList.add('show');
+}
+function closeFieldModal() { document.getElementById('fieldModal').classList.remove('show'); }
+function toggleFieldOptions() { document.getElementById('fieldOptionsRow').style.display=document.getElementById('fieldTypeInput').value==='dropdown'?'block':'none'; }
+function saveField() {
+  const name=document.getElementById('fieldNameInput').value.trim();
+  const type=document.getElementById('fieldTypeInput').value;
+  const enabled=document.getElementById('fieldEnabledInput').checked;
+  const optsRaw=document.getElementById('fieldOptionsInput').value;
+  if(!name){alert('请输入字段名称');return;}
+  if(type==='dropdown' && !optsRaw.trim()){alert('至少需要一个选项');return;}
+  if(editingFieldId) {
+    const f=state.fields.find(x=>x.id===editingFieldId);
+    if(f){f.name=name;f.type=type;f.enabled=enabled;f.options=type==='dropdown'?optsRaw.split('\n').map(s=>s.trim()).filter(s=>s):[];}
+  } else {
+    state.fields.push({id:'f_'+Date.now()+'_'+Math.random().toString(36).slice(2,6),name,type,options:type==='dropdown'?optsRaw.split('\n').map(s=>s.trim()).filter(s=>s):[],order:state.fields.length,enabled});
+  }
+  closeFieldModal(); renderFields(); renderForm(); debounceSaveFields();
+}
+let fieldSaveTimer;
+function debounceSaveFields() { clearTimeout(fieldSaveTimer); fieldSaveTimer=setTimeout(()=>saveFields(), 500); }
+
+function loadTemplate(name) {
+  const tpl = {
+    basic: [{name:'交易品种',type:'text'},{name:'操作方向',type:'dropdown',options:['做多','做空']},{name:'开仓价格',type:'number'},{name:'止损价',type:'number'},{name:'止盈价',type:'number'},{name:'开仓理由',type:'textarea'}],
+    full: [{name:'交易品种',type:'text'},{name:'趋势方向',type:'dropdown',options:['多头','空头','震荡']},{name:'操作方向',type:'dropdown',options:['开多','开空']},{name:'形态类型',type:'dropdown',options:['头肩顶','头肩底','双底','双顶','旗形','三角','楔形','矩形','V形反转','其他']},{name:'开仓价格',type:'number'},{name:'止损价位',type:'number'},{name:'止盈价位',type:'number'},{name:'交易周期',type:'dropdown',options:['1分钟','5分钟','15分钟','30分钟','60分钟','日线','周线','月线']},{name:'仓位比例（%）',type:'number'},{name:'开仓理由',type:'textarea'}],
+    futures: [{name:'合约名称',type:'text'},{name:'操作方向',type:'dropdown',options:['做多','做空']},{name:'开仓价格',type:'number'},{name:'手数',type:'number'},{name:'止损价位',type:'number'},{name:'止盈价位',type:'number'},{name:'K线周期',type:'dropdown',options:['1分钟','5分钟','15分钟','30分钟','60分钟','日线']},{name:'入场信号',type:'dropdown',options:['均线交叉','突破前高/低','支撑/阻力反弹','K线形态','指标背离','其他']}],
+  };
+  if(!tpl[name]) return;
+  if(!confirm('加载模板将替换所有字段，确定？')) return;
+  state.fields = tpl[name].map((t,i)=>({id:'f_'+Date.now()+'_'+i,order:i,enabled:true,...t}));
+  renderFields(); renderForm(); debounceSaveFields();
+}
+
+// ========== Form ==========
+function renderForm() {
+  const container = document.getElementById('formFields');
+  const enabled = state.fields.filter(f=>f.enabled).sort((a,b)=>a.order-b.order);
+  if (!enabled.length) {
+    container.innerHTML = '<div style="color:var(--text2);font-size:13px;">暂无启用的字段，请到「字段管理」添加</div>';
+    return;
+  }
+  container.innerHTML = enabled.map(f => {
+    const fid = 'entry_'+f.id;
+    let h = '<div class="form-row"><label>'+f.name+'</label>';
+    switch(f.type) {
+      case 'text': h += '<input type="text" id="'+fid+'">'; break;
+      case 'number': h += '<input type="number" id="'+fid+'" step="any">'; break;
+      case 'dropdown': h += '<select id="'+fid+'"><option value="">-- 请选择 --</option>'+(f.options||[]).map(o=>'<option value="'+o+'">'+o+'</option>').join('')+'</select>'; break;
+      case 'textarea': h += '<textarea id="'+fid+'" rows="3"></textarea>'; break;
+      case 'boolean': h += '<label class="checkbox-label"><input type="checkbox" id="'+fid+'"> 是</label>'; break;
+    }
+    h += '</div>';
+    return h;
+  }).join('');
+}
+
+function getFormValues() {
+  const vals = {};
+  state.fields.filter(f=>f.enabled).forEach(f => {
+    const el = document.getElementById('entry_'+f.id);
+    if(!el) return;
+    if(f.type==='boolean') vals[f.id]=el.checked;
+    else if(f.type==='number') vals[f.id]=el.value?parseFloat(el.value):null;
+    else vals[f.id]=el.value||'';
+  });
+  return vals;
+}
+
+function resetForm() {
+  document.querySelectorAll('#formFields input, #formFields textarea, #formFields select').forEach(el => {
+    if(el.tagName==='INPUT'&&el.type==='checkbox') el.checked=false; else el.value='';
+  });
+  clearPendingImages();
+  updateTime();
+}
+
+// ========== Save Record ==========
+async function saveEntry(andNew) {
+  const values = getFormValues();
+  const hasValue = Object.values(values).some(v=>v!==''&&v!==null&&v!==false);
+  const filenames = pendingImages.filter(p=>p.filename).map(p=>p.filename);
+  if (!hasValue && !filenames.length) { alert('请至少填写一项或上传截图'); return; }
+  const record = {
+    id: 'r_'+Date.now()+'_'+Math.random().toString(36).slice(2,6),
+    timestamp: new Date().toISOString(),
+    values,
+    screenshots: filenames,
+  };
+  try {
+    await createRecord(record);
+    state.records.unshift(record);
+    clearPendingImages();
+    resetForm();
+    renderAll();
+    if (!andNew) alert('已保存');
+  } catch(e) {
+    alert('保存失败：' + e.message);
+  }
+}
+function saveEntry() { saveEntry(false); }
+function saveAndNew() { saveEntry(true); }
+
+// ========== Close ==========
+async function closeEntry() {
+  const id = document.getElementById('closeRecordSelect').value;
+  const price = parseFloat(document.getElementById('closePrice').value);
+  const type = document.getElementById('closeType').value;
+  const pnl = document.getElementById('closePnL').value ? parseFloat(document.getElementById('closePnL').value) : null;
+  if(!id){alert('请选择记录');return;}
+  if(isNaN(price)){alert('请输入平仓价格');return;}
+  const now = new Date().toISOString();
+  await closeRecord(id, { result: type, closePrice: price, closeTime: now, closeType: type, closePnL: pnl });
+  const r = state.records.find(x=>x.id===id);
+  if(r) { r.result=type; r.closePrice=price; r.closeTime=now; r.closeType=type; r.closePnL=pnl; }
+  renderAll();
+  document.getElementById('closePrice').value='';
+  document.getElementById('closePnL').value='';
+  alert('平仓已记录');
+}
+
+function renderCloseSelect() {
+  const sel = document.getElementById('closeRecordSelect');
+  const pending = state.records.filter(r=>!r.result);
+  sel.innerHTML = pending.length ? pending.map(r=>{
+    const label=Object.values(r.values).filter(x=>x&&x!=='').slice(0,3).join(' | ');
+    const img=r.screenshots&&r.screenshots.length?' 🖼':'';
+    return '<option value="'+r.id+'">'+label+img+'</option>';
+  }).join('') : '<option value="">暂无持仓记录</option>';
+}
+
+// ========== History ==========
+function renderHistory() {
+  const filter = document.getElementById('filterResult').value;
+  const header = document.getElementById('historyHeader');
+  const body = document.getElementById('historyBody');
+  const empty = document.getElementById('historyEmpty');
+
+  let filtered = state.records;
+  if(filter==='pending') filtered=filtered.filter(r=>!r.result);
+  else if(filter!=='all') filtered=filtered.filter(r=>r.result===filter);
+
+  if(!filtered.length){header.innerHTML='';body.innerHTML='';empty.style.display='block';return;}
+  empty.style.display='none';
+
+  const flds = state.fields.filter(f=>f.enabled).sort((a,b)=>a.order-b.order);
+  let cols = ['时间', ...flds.map(f=>f.name), '截图', '结果'];
+  if(filtered.some(r=>r.result)) cols.push('平仓价','盈亏');
+  cols.push('操作');
+
+  header.innerHTML = cols.map(c=>'<th>'+c+'</th>').join('');
+  body.innerHTML = filtered.map(r => {
+    const t = new Date(r.timestamp).toLocaleString('zh-CN',{hour12:false});
+    const vals = flds.map(f => {
+      const v=r.values[f.id];
+      if(v===null||v===undefined||v==='') return '<span style="color:var(--text2)">-</span>';
+      if(f.type==='boolean') return v?'✓':'✗';
+      return v;
+    });
+    const hasImg = r.screenshots&&r.screenshots.length;
+    const imgIcon = hasImg?'<span style="cursor:pointer;" onclick="event.stopPropagation();openLightbox(\''+imgUrl(r.screenshots[0])+'\')">🖼 '+r.screenshots.length+'</span>':'<span style="color:var(--text2)">-</span>';
+    const badge = !r.result?'<span class="result-badge pending">持仓中</span>':r.result==='止盈'?'<span class="result-badge win">✓ 止盈</span>':r.result==='止损'?'<span class="result-badge loss">✗ 止损</span>':'<span class="result-badge" style="background:rgba(79,140,255,.15);color:var(--accent)">'+r.result+'</span>';
+    const cp = r.closePrice!==null?r.closePrice.toFixed(2):'';
+    const pnlStr = r.closePnL!==null?(r.closePnL>=0?'<span style="color:var(--green)">+'+r.closePnL.toFixed(2)+'</span>':'<span style="color:var(--red)">'+r.closePnL.toFixed(2)+'</span>'):'';
+    return '<tr onclick="viewRecord(\''+r.id+'\')" style="cursor:pointer;">'
+      +'<td style="white-space:nowrap;font-size:11px;color:var(--text2)">'+t+'</td>'
+      +vals.map(v=>'<td>'+v+'</td>').join('')
+      +'<td>'+imgIcon+'</td>'
+      +'<td>'+badge+'</td>'
+      +(r.result?'<td>'+cp+'</td><td>'+pnlStr+'</td>':'')
+      +'<td><button class="btn btn-danger btn-sm" onclick="event.stopPropagation();deleteRecord(\''+r.id+'\')">删除</button></td>'
+      +'</tr>';
+  }).join('');
+}
+
+async function deleteRecord(id) {
+  if(!confirm('确定删除这条记录及其截图？')) return;
+  await deleteRecordApi(id);
+  state.records = state.records.filter(r=>r.id!==id);
+  renderAll();
+}
+
+// ========== View Record ==========
+function viewRecord(id) {
+  const r=state.records.find(x=>x.id===id);
+  if(!r) return;
+  viewingRecordId=id;
+  document.getElementById('recordModalTitle').textContent='记录详情';
+  const flds=state.fields.filter(f=>f.enabled).sort((a,b)=>a.order-b.order);
+  let h='<div style="font-size:11px;color:var(--text2);margin-bottom:12px;">'+new Date(r.timestamp).toLocaleString('zh-CN',{hour12:false})+'</div>';
+  h+='<table style="width:100%"><tbody>';
+  flds.forEach(f=>{
+    const v=r.values[f.id];
+    let d='';
+    if(v===null||v===undefined||v==='') d='<span style="color:var(--text2)">-</span>';
+    else if(f.type==='boolean') d=v?'✓ 是':'✗ 否';
+    else d=v;
+    h+='<tr><td style="width:100px;color:var(--text2);font-size:12px;padding:6px 8px;">'+f.name+'</td><td style="padding:6px 8px;">'+d+'</td></tr>';
+  });
+  if(r.result) {
+    h+='<tr><td style="color:var(--text2);font-size:12px;padding:6px 8px;">结果</td><td style="padding:6px 8px;"><span class="result-badge '+(r.result==='止盈'?'win':r.result==='止损'?'loss':'')+'">'+r.result+'</span></td></tr>';
+    h+='<tr><td style="color:var(--text2);padding:6px 8px;">平仓价</td><td style="padding:6px 8px;">'+(r.closePrice!==null?r.closePrice.toFixed(2):'-')+'</td></tr>';
+    h+='<tr><td style="color:var(--text2);padding:6px 8px;">盈亏额</td><td style="padding:6px 8px;">'+(r.closePnL!==null?(r.closePnL>=0?'<span style="color:var(--green)">+'+r.closePnL.toFixed(2)+'</span>':'<span style="color:var(--red)">'+r.closePnL.toFixed(2)+'</span>'):'-')+'</td></tr>';
+    if(r.closeTime) h+='<tr><td style="color:var(--text2);padding:6px 8px;">平仓时间</td><td style="padding:6px 8px;">'+new Date(r.closeTime).toLocaleString('zh-CN',{hour12:false})+'</td></tr>';
+  } else {
+    h+='<tr><td style="color:var(--text2);padding:6px 8px;">状态</td><td style="padding:6px 8px;"><span class="result-badge pending">持仓中</span></td></tr>';
+  }
+  h+='</tbody></table>';
+
+  if(r.screenshots&&r.screenshots.length) {
+    h+='<div style="margin-top:12px;border-top:1px solid var(--border);padding-top:12px;">';
+    h+='<div style="font-size:12px;color:var(--text2);margin-bottom:8px;">截图（'+r.screenshots.length+'张）</div>';
+    h+='<div class="img-grid" style="grid-template-columns:repeat(auto-fill,minmax(120px,1fr));">';
+    r.screenshots.forEach(url=>{h+='<div class="img-thumb"><img src="'+imgUrl(url)+'" onclick="openLightbox(\''+imgUrl(url)+'\')"></div>';});
+    h+='</div></div>';
+  }
+
+  if(!r.result) {
+    h+='<div style="margin-top:16px;border-top:1px solid var(--border);padding-top:16px;"><div style="font-weight:600;font-size:13px;margin-bottom:8px;">快速平仓</div>';
+    h+='<div style="display:flex;gap:8px;flex-wrap:wrap;">';
+    h+='<input type="number" id="modalClosePrice" step="any" placeholder="平仓价格" style="flex:1;min-width:80px;padding:6px 10px;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);color:var(--text);font-size:13px;">';
+    h+='<input type="number" id="modalClosePnL" step="any" placeholder="盈亏额（可选）" style="flex:1;min-width:80px;padding:6px 10px;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);color:var(--text);font-size:13px;">';
+    h+='<select id="modalCloseType" style="padding:6px 10px;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);color:var(--text);font-size:13px;"><option value="止盈">止盈</option><option value="止损">止损</option><option value="手动平仓">手动平仓</option></select>';
+    h+='<button class="btn btn-primary btn-sm" onclick="closeFromModal()">确认</button></div></div>';
+  }
+
+  document.getElementById('recordModalBody').innerHTML=h;
+  document.getElementById('recordModal').classList.add('show');
+}
+
+function closeRecordModal() { document.getElementById('recordModal').classList.remove('show'); viewingRecordId=null; }
+async function closeFromModal() {
+  const id=viewingRecordId;
+  const price=parseFloat(document.getElementById('modalClosePrice').value);
+  const type=document.getElementById('modalCloseType').value;
+  const pnl=document.getElementById('modalClosePnL').value?parseFloat(document.getElementById('modalClosePnL').value):null;
+  if(!id||isNaN(price)){alert('请输入平仓价格');return;}
+  const now=new Date().toISOString();
+  await closeRecord(id,{result:type,closePrice:price,closeTime:now,closeType:type,closePnL:pnl});
+  const r=state.records.find(x=>x.id===id);
+  if(r){r.result=type;r.closePrice=price;r.closeTime=now;r.closeType=type;r.closePnL=pnl;}
+  closeRecordModal(); renderAll();
+}
+function deleteCurrentRecord() { if(viewingRecordId) deleteRecord(viewingRecordId); closeRecordModal(); }
+
+// ========== Stats ==========
+function updateStats() {
+  const total=state.records.length;
+  const closed=state.records.filter(r=>r.result);
+  const wins=state.records.filter(r=>r.result==='止盈').length;
+  const losses=state.records.filter(r=>r.result==='止损').length;
+  const pending=total-closed.length;
+  const imgs=state.records.reduce((s,r)=>s+(r.screenshots?r.screenshots.length:0),0);
+  let txt=total+' 条';
+  if(total) txt+='  |  持仓 '+pending+'  |  止盈 '+wins+'  |  止损 '+losses;
+  if(wins+losses>0) txt+='  |  胜率 '+(wins/(wins+losses)*100).toFixed(1)+'%';
+  if(imgs) txt+='  |  🖼'+imgs;
+  document.getElementById('recordCount').textContent=txt;
+}
+
+// ========== Export / Import ==========
+async function exportData() {
+  try {
+    const data = await api('/api/export');
+    const blob = new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a');
+    a.href=url; a.download='trade-log-'+new Date().toISOString().slice(0,10)+'.json'; a.click();
+    URL.revokeObjectURL(url);
+  } catch(e) {
+    alert('导出失败：'+e.message);
+  }
+}
+function importData() { document.getElementById('importFile').click(); }
+async function handleImport(e) {
+  const file=e.target.files[0];
+  if(!file) return;
+  const text=await file.text();
+  try {
+    const data=JSON.parse(text);
+    if(!data.fields||!data.records){alert('无效文件');return;}
+    if(!confirm('导入将替换现有 '+state.records.length+' 条记录，确定？')) return;
+    await api('/api/import',{method:'POST',body:text});
+    state.fields=data.fields;
+    state.records=data.records;
+    renderAll();
+    alert('导入成功：'+data.records.length+'条');
+  } catch(e){alert('导入失败：'+e.message);}
+  e.target.value='';
+}
+
+// ========== Drop Zone ==========
+function setupDropZone() {
+  const dz=document.getElementById('dropZone');
+  dz.addEventListener('dragover',e=>{e.preventDefault();dz.classList.add('dragover');});
+  dz.addEventListener('dragleave',e=>{e.preventDefault();dz.classList.remove('dragover');});
+  dz.addEventListener('drop',e=>{e.preventDefault();dz.classList.remove('dragover');if(e.dataTransfer.files.length)handleFiles(e.dataTransfer.files);});
+  document.getElementById('fileInput').addEventListener('change',e=>{if(e.target.files.length)handleFiles(e.target.files);e.target.value='';});
+  document.addEventListener('paste',e=>{
+    if(!document.getElementById('panel-entry').classList.contains('active')) return;
+    if(e.clipboardData.files.length){e.preventDefault();handleFiles(e.clipboardData.files);}
+  });
+}
+
+// ========== Render All ==========
+function renderAll() {
+  renderFields();
+  renderForm();
+  renderHistory();
+  renderCloseSelect();
+  updateStats();
+}
+
+// ========== Tabs ==========
+document.querySelectorAll('.tab-btn').forEach(btn=>{
+  btn.addEventListener('click',()=>{
+    document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+    document.querySelectorAll('.tab-panel').forEach(p=>p.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('panel-'+btn.dataset.tab).classList.add('active');
+    if(btn.dataset.tab==='history') renderHistory();
+  });
+});
+
+// ========== Keyboard ==========
+document.addEventListener('keydown',e=>{
+  if(e.key==='Escape'){closeLightbox();closeRecordModal();closeFieldModal();}
+  if((e.ctrlKey||e.metaKey)&&e.key==='Enter'){
+    if(document.getElementById('panel-entry').classList.contains('active')) saveEntry();
+  }
+});
+
+// ========== Time ==========
+function updateTime() {
+  document.getElementById('currentTime').textContent=new Date().toLocaleString('zh-CN',{hour12:false});
+}
+
+// ========== Init ==========
+setupDropZone();
+loadData();
+updateTime();
+setInterval(updateTime, 10000);
+</script>
+</body>
+</html>
