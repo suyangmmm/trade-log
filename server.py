@@ -13,7 +13,11 @@ BASE_DIR = Path(__file__).parent.resolve()
 DB_PATH = Path(os.environ.get('TRADE_DB_PATH', str(BASE_DIR / 'trade.db')))
 UPLOAD_DIR = BASE_DIR / 'uploads'
 HOST = os.environ.get('TRADE_HOST', '0.0.0.0')
-PORT = int(os.environ.get('TRADE_PORT', '5800'))
+PORT = int(os.environ.get("TRADE_PORT", "5800"))
+USE_HTTPS = os.environ.get("TRADE_HTTPS", "0") == "1"
+CERT_FILE = os.environ.get("TRADE_CERT", str(BASE_DIR / "cert.pem"))
+KEY_FILE = os.environ.get("TRADE_KEY", str(BASE_DIR / "key.pem"))
+SCHEME = "https" if USE_HTTPS else "http"
 SECRET_KEY = os.environ.get('TRADE_SECRET', 'change-me-to-something-random')
 DEBUG = os.environ.get('TRADE_DEBUG', '0') == '1'
 MAX_CONTENT_LENGTH = int(os.environ.get('TRADE_MAX_UPLOAD_MB', '20')) * 1024 * 1024
