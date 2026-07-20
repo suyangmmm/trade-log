@@ -10,9 +10,6 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY server.py ./
 COPY trade-log.html ./
 
-# 数据持久化目录
-VOLUME ["/app/trade.db", "/app/uploads"]
-
 # 环境变量
 ENV TRADE_PORT=5800
 ENV TRADE_HOST=0.0.0.0
